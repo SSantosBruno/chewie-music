@@ -4,11 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Escanear QR Code</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js" integrity="sha512-r6rPgZ74poM5qp6WHL9HIwGtSUIkg9gS0w0c4767I9E1A3343tYnN0ZjuGvvd89A4w3D68eU2U7I88D169w==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: Arial, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -19,7 +20,6 @@
             padding: 20px;
             box-sizing: border-box;
         }
-
         .container {
             background-color: white;
             padding: 25px;
@@ -29,66 +29,42 @@
             width: 100%;
             max-width: 450px;
         }
-
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
-            font-size: 24px;
-        }
-
         #reader {
             width: 100%;
-            background-color: #000;
+            background-color: #111;
             border-radius: 8px;
             overflow: hidden;
             margin-bottom: 20px;
         }
-
         button {
-            background-color: #007bff;
+            background-color: #28a745;
             color: white;
             border: none;
-            padding: 12px 24px;
+            padding: 15px 24px;
             font-size: 16px;
             border-radius: 6px;
             cursor: pointer;
-            transition: background-color 0.2s;
             width: 100%;
             font-weight: bold;
         }
-
-        button:hover {
-            background-color: #0056b3;
+        button:disabled { background-color: #ccc; }
+        .result-box { margin-top: 20px; text-align: left; }
+        textarea {
+            width: 100%; height: 60px; padding: 10px;
+            border: 1px solid #ddd; border-radius: 6px;
+            box-sizing: border-box; background-color: #fafafa;
         }
-
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-
-        .result-box {
-            margin-top: 20px;
-            text-align: left;
-        }
-
-        label {
-            display: block;
-            font-weight: bold;
-            margin-bottom: 5px;
-            color: #666;
-        }
-
-        #result-text {
-            width: 100%;
-            height: 60px;
+        /* Caixa de debug para ver o erro no celular */
+        #debug-log {
+            margin-top: 15px;
             padding: 10px;
-            border: 2px border #ddd;
+            background-color: #fce8e6;
+            color: #a51d24;
             border-radius: 6px;
-            box-sizing: border-box;
-            background-color: #fafafa;
-            font-size: 14px;
-            color: #333;
-            resize: none;
+            font-size: 12px;
+            text-align: left;
+            display: none;
+            word-break: break-all;
         }
     </style>
 </head>
@@ -96,63 +72,74 @@
 
 <div class="container">
     <h1>Leitor de QR Code</h1>
-    
     <div id="reader"></div>
-    
     <button id="btn-scan">Iniciar Câmera</button>
 
     <div class="result-box">
-        <label for="result-text">Resultado do Scan:</label>
+        <label>Resultado:</label>
         <textarea id="result-text" readonly placeholder="O link aparecerá aqui..."></textarea>
     </div>
+
+    <div id="debug-log"></div>
 </div>
 
 <script>
     const btnScan = document.getElementById('btn-scan');
     const resultText = document.getElementById('result-text');
+    const debugLog = document.getElementById('debug-log');
     let html5QrCode;
     let isScanning = false;
 
+    function showLog(msg) {
+        debugLog.style.display = "block";
+        debugLog.innerText = msg;
+    }
+
     btnScan.addEventListener('click', () => {
+        // Testar se a biblioteca realmente carregou
+        if (typeof Html5Qrcode === 'undefined') {
+            showLog("Erro: A biblioteca de QR Code não foi carregada pelo navegador. Verifique sua conexão ou adicione o script localmente.");
+            return;
+        }
+
         if (!isScanning) {
-            // Se não estiver escaneando, inicia a câmera
             startScanner();
         } else {
-            // Se já estiver escaneando, para a câmera
             stopScanner();
         }
     });
 
     function startScanner() {
-        // Cria a instância do scanner apontando para a div '#reader'
-        html5QrCode = new Html5Qrcode("reader");
-        
-        btnScan.innerText = "Carregando câmera...";
-        btnScan.disabled = true;
+        try {
+            html5QrCode = new Html5Qrcode("reader");
+            btnScan.innerText = "Carregando...";
+            btnScan.disabled = true;
 
-        // Configurações do Scanner
-        const config = { 
-            fps: 10,             // Frames por segundo (10 é ideal para mobile)
-            qrbox: { width: 250, height: 250 } // Tamanho da área de foco do QR Code
-        };
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
 
-        // Força o uso da câmera traseira ('environment')
-        html5QrCode.start(
-            { facingMode: "environment" }, 
-            config,
-            onScanSuccess,
-            onScanFailure
-        ).then(() => {
-            isScanning = true;
-            btnScan.innerText = "Parar Câmera";
-            btnScan.disabled = false;
-            resultText.value = ""; // Limpa o resultado anterior
-        }).catch((err) => {
-            console.error("Erro ao iniciar a câmera:", err);
-            alert("Não foi possível acessar a câmera traseira. Verifique as permissões.");
+            html5QrCode.start(
+                { facingMode: "environment" }, 
+                config,
+                (text) => { // Sucesso
+                    resultText.value = text;
+                    stopScanner();
+                },
+                (err) => { /* falhas de frame ignoradas */ }
+            ).then(() => {
+                isScanning = true;
+                btnScan.innerText = "Parar Câmera";
+                btnScan.disabled = false;
+                debugLog.style.display = "none";
+            }).catch((err) => {
+                btnScan.innerText = "Iniciar Câmera";
+                btnScan.disabled = false;
+                showLog("Erro ao iniciar câmera: " + err);
+            });
+        } catch (e) {
+            showLog("Erro de execução: " + e.message);
             btnScan.innerText = "Iniciar Câmera";
             btnScan.disabled = false;
-        });
+        }
     }
 
     function stopScanner() {
@@ -160,29 +147,8 @@
             html5QrCode.stop().then(() => {
                 isScanning = false;
                 btnScan.innerText = "Iniciar Câmera";
-            }).catch((err) => {
-                console.error("Erro ao parar a câmera:", err);
             });
         }
-    }
-
-    // Função executada quando o QR Code é lido com sucesso
-    function onScanSuccess(decodedText, decodedResult) {
-        // Mostra o resultado na caixa de texto
-        resultText.value = decodedText;
-        
-        // Emite um feedback sonoro/vibratório discreto se o celular suportar
-        if (navigator.vibrate) {
-            navigator.vibrate(100);
-        }
-
-        // Para a câmera automaticamente após ler com sucesso
-        stopScanner();
-    }
-
-    // Função executada a cada frame que NÃO encontra um QR code (opcional)
-    function onScanFailure(error) {
-        // Deixamos vazio para não poluir o console, já que ele roda várias vezes por segundo
     }
 </script>
 
