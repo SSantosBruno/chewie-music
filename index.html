@@ -521,7 +521,21 @@
   let isScanning = false;
   let html5QrCode;
   let currentTrackUrl = null;
-  let spotifyWindow  = null;
+
+  // ── Converte URL do Spotify para o URI scheme nativo ─────
+  // https://open.spotify.com/track/ID → spotify:track:ID
+  // Isso abre o app sem navegar para fora do app web
+  function toSpotifyUri(url) {
+    const match = url.match(/open\.spotify\.com\/(track|album|playlist|episode)\/([A-Za-z0-9]+)/);
+    if (match) return `spotify:${match[1]}:${match[2]}`;
+    return url; // fallback: retorna a URL original
+  }
+
+  function launchSpotify(url) {
+    const uri = toSpotifyUri(url);
+    // Usar location.href com o URI scheme nativo NÃO navega para fora da página
+    window.location.href = uri;
+  }
 
   // ── helpers ──────────────────────────────────────────────
   function setPlaying(state) {
@@ -541,21 +555,19 @@
 
   function triggerFlash() {
     flash.classList.remove('go');
-    void flash.offsetWidth; // reflow
+    void flash.offsetWidth;
     flash.classList.add('go');
   }
 
   // ── Play / Pause ─────────────────────────────────────────
   btnPlay.addEventListener('click', () => {
     if (!currentTrackUrl) {
-      // Nothing loaded yet – just toggle animation for demo
       setPlaying(!isPlaying);
       return;
     }
     if (!isPlaying) {
-      // Try to resume / reopen Spotify
-      window.location.href = currentTrackUrl;
       setPlaying(true);
+      launchSpotify(currentTrackUrl);
     } else {
       setPlaying(false);
     }
@@ -616,13 +628,12 @@
     closeScanner(() => {
       triggerFlash();
       currentTrackUrl = url;
-
-      // Small delay so flash animation plays before redirect
+      // Volta para a tela principal com disco girando,
+      // abre o Spotify em background via URI scheme nativo
       setTimeout(() => {
         setPlaying(true);
-        // Open Spotify — on mobile this redirects to the app
-        window.location.href = url;
-      }, 350);
+        launchSpotify(url);
+      }, 400);
     });
   }
 </script>
